@@ -12,7 +12,6 @@ from starlette.responses import (
     RedirectResponse,
     Response,
     StreamingResponse,
-    UJSONResponse,
 )
 from starlette.testclient import TestClient
 
@@ -37,16 +36,6 @@ def test_bytes_response():
     assert response.content == b"xxxxx"
 
 
-def test_ujson_response():
-    async def app(scope, receive, send):
-        response = UJSONResponse({"hello": "world"})
-        await response(scope, receive, send)
-
-    client = TestClient(app)
-    response = client.get("/")
-    assert response.json() == {"hello": "world"}
-
-
 def test_json_none_response():
     async def app(scope, receive, send):
         response = JSONResponse(None)
@@ -69,6 +58,20 @@ def test_redirect_response():
     response = client.get("/redirect")
     assert response.text == "hello, world"
     assert response.url == "http://testserver/"
+
+
+def test_quoting_redirect_response():
+    async def app(scope, receive, send):
+        if scope["path"] == "/I ♥ Starlette/":
+            response = Response("hello, world", media_type="text/plain")
+        else:
+            response = RedirectResponse("/I ♥ Starlette/")
+        await response(scope, receive, send)
+
+    client = TestClient(app)
+    response = client.get("/redirect")
+    assert response.text == "hello, world"
+    assert response.url == "http://testserver/I%20%E2%99%A5%20Starlette/"
 
 
 def test_streaming_response():

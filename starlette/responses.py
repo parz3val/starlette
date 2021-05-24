@@ -7,7 +7,7 @@ import sys
 import typing
 from email.utils import formatdate
 from mimetypes import guess_type as mimetypes_guess_type
-from urllib.parse import quote, quote_plus
+from urllib.parse import quote
 
 from starlette.background import BackgroundTask
 from starlette.concurrency import iterate_in_threadpool, run_until_first_complete
@@ -23,11 +23,6 @@ try:
 except ImportError:  # pragma: nocover
     aiofiles = None  # type: ignore
     aio_stat = None  # type: ignore
-
-try:
-    import ujson
-except ImportError:  # pragma: nocover
-    ujson = None  # type: ignore
 
 
 # Compatibility wrapper for `mimetypes.guess_type` to support `os.PathLike` on <py3.8
@@ -172,14 +167,6 @@ class JSONResponse(Response):
         ).encode("utf-8")
 
 
-class UJSONResponse(JSONResponse):
-    media_type = "application/json"
-
-    def render(self, content: typing.Any) -> bytes:
-        assert ujson is not None, "ujson must be installed to use UJSONResponse"
-        return ujson.dumps(content, ensure_ascii=False).encode("utf-8")
-
-
 class RedirectResponse(Response):
     def __init__(
         self,
@@ -191,7 +178,7 @@ class RedirectResponse(Response):
         super().__init__(
             content=b"", status_code=status_code, headers=headers, background=background
         )
-        self.headers["location"] = quote_plus(str(url), safe=":/%#?&=@[]!$&'()*+,;")
+        self.headers["location"] = quote(str(url), safe=":/%#?=@[]!$&'()*+,;")
 
 
 class StreamingResponse(Response):
