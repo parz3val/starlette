@@ -107,7 +107,7 @@ class Jinja2Templates:
 
         request = typing.cast(Request, context["request"])
         for context_processor in self.context_processors:
-            context.update(context_processor(request))
+            context |= context_processor(request)
 
         template = self.get_template(name)
         return _TemplateResponse(

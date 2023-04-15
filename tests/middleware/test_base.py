@@ -253,9 +253,10 @@ async def test_run_background_tasks_even_if_client_disconnects():
         return {"type": "http.disconnect"}
 
     async def send(message):
-        if message["type"] == "http.response.body":
-            if not message.get("more_body", False):
-                response_complete.set()
+        if message["type"] == "http.response.body" and not message.get(
+            "more_body", False
+        ):
+            response_complete.set()
 
     await app(scope, receive, send)
 
@@ -316,9 +317,10 @@ async def test_run_context_manager_exit_even_if_client_disconnects():
         return {"type": "http.disconnect"}
 
     async def send(message):
-        if message["type"] == "http.response.body":
-            if not message.get("more_body", False):
-                response_complete.set()
+        if message["type"] == "http.response.body" and not message.get(
+            "more_body", False
+        ):
+            response_complete.set()
 
     await app(scope, receive, send)
 

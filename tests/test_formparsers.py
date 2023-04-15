@@ -90,9 +90,7 @@ async def app_read_body(scope, receive, send):
     # Read bytes, to force request.stream() to return the already parsed body
     await request.body()
     data = await request.form()
-    output = {}
-    for key, value in data.items():
-        output[key] = value
+    output = dict(data.items())
     await request.close()
     response = JSONResponse(output)
     await response(scope, receive, send)
@@ -494,11 +492,10 @@ def test_missing_name_parameter_on_content_disposition(
 )
 def test_too_many_fields_raise(app, expectation, test_client_factory):
     client = test_client_factory(app)
-    fields = []
-    for i in range(1001):
-        fields.append(
-            "--B\r\n" f'Content-Disposition: form-data; name="N{i}";\r\n\r\n' "\r\n"
-        )
+    fields = [
+        f'--B\r\nContent-Disposition: form-data; name="N{i}";\r\n\r\n\r\n'
+        for i in range(1001)
+    ]
     data = "".join(fields).encode("utf-8")
     with expectation:
         res = client.post(
@@ -519,13 +516,10 @@ def test_too_many_fields_raise(app, expectation, test_client_factory):
 )
 def test_too_many_files_raise(app, expectation, test_client_factory):
     client = test_client_factory(app)
-    fields = []
-    for i in range(1001):
-        fields.append(
-            "--B\r\n"
-            f'Content-Disposition: form-data; name="N{i}"; filename="F{i}";\r\n\r\n'
-            "\r\n"
-        )
+    fields = [
+        f'--B\r\nContent-Disposition: form-data; name="N{i}"; filename="F{i}";\r\n\r\n\r\n'
+        for i in range(1001)
+    ]
     data = "".join(fields).encode("utf-8")
     with expectation:
         res = client.post(
@@ -546,15 +540,10 @@ def test_too_many_files_raise(app, expectation, test_client_factory):
 )
 def test_too_many_files_single_field_raise(app, expectation, test_client_factory):
     client = test_client_factory(app)
-    fields = []
-    for i in range(1001):
-        # This uses the same field name "N" for all files, equivalent to a
-        # multifile upload form field
-        fields.append(
-            "--B\r\n"
-            f'Content-Disposition: form-data; name="N"; filename="F{i}";\r\n\r\n'
-            "\r\n"
-        )
+    fields = [
+        f'--B\r\nContent-Disposition: form-data; name="N"; filename="F{i}";\r\n\r\n\r\n'
+        for i in range(1001)
+    ]
     data = "".join(fields).encode("utf-8")
     with expectation:
         res = client.post(
@@ -577,13 +566,11 @@ def test_too_many_files_and_fields_raise(app, expectation, test_client_factory):
     client = test_client_factory(app)
     fields = []
     for i in range(1001):
-        fields.append(
-            "--B\r\n"
-            f'Content-Disposition: form-data; name="F{i}"; filename="F{i}";\r\n\r\n'
-            "\r\n"
-        )
-        fields.append(
-            "--B\r\n" f'Content-Disposition: form-data; name="N{i}";\r\n\r\n' "\r\n"
+        fields.extend(
+            (
+                f'--B\r\nContent-Disposition: form-data; name="F{i}"; filename="F{i}";\r\n\r\n\r\n',
+                f'--B\r\nContent-Disposition: form-data; name="N{i}";\r\n\r\n\r\n',
+            )
         )
     data = "".join(fields).encode("utf-8")
     with expectation:
@@ -608,11 +595,10 @@ def test_too_many_files_and_fields_raise(app, expectation, test_client_factory):
 )
 def test_max_fields_is_customizable_low_raises(app, expectation, test_client_factory):
     client = test_client_factory(app)
-    fields = []
-    for i in range(2):
-        fields.append(
-            "--B\r\n" f'Content-Disposition: form-data; name="N{i}";\r\n\r\n' "\r\n"
-        )
+    fields = [
+        f'--B\r\nContent-Disposition: form-data; name="N{i}";\r\n\r\n\r\n'
+        for i in range(2)
+    ]
     data = "".join(fields).encode("utf-8")
     with expectation:
         res = client.post(
@@ -636,13 +622,10 @@ def test_max_fields_is_customizable_low_raises(app, expectation, test_client_fac
 )
 def test_max_files_is_customizable_low_raises(app, expectation, test_client_factory):
     client = test_client_factory(app)
-    fields = []
-    for i in range(2):
-        fields.append(
-            "--B\r\n"
-            f'Content-Disposition: form-data; name="F{i}"; filename="F{i}";\r\n\r\n'
-            "\r\n"
-        )
+    fields = [
+        f'--B\r\nContent-Disposition: form-data; name="F{i}"; filename="F{i}";\r\n\r\n\r\n'
+        for i in range(2)
+    ]
     data = "".join(fields).encode("utf-8")
     with expectation:
         res = client.post(
@@ -658,13 +641,11 @@ def test_max_fields_is_customizable_high(test_client_factory):
     client = test_client_factory(make_app_max_parts(max_fields=2000, max_files=2000))
     fields = []
     for i in range(2000):
-        fields.append(
-            "--B\r\n" f'Content-Disposition: form-data; name="N{i}";\r\n\r\n' "\r\n"
-        )
-        fields.append(
-            "--B\r\n"
-            f'Content-Disposition: form-data; name="F{i}"; filename="F{i}";\r\n\r\n'
-            "\r\n"
+        fields.extend(
+            (
+                f'--B\r\nContent-Disposition: form-data; name="N{i}";\r\n\r\n\r\n',
+                f'--B\r\nContent-Disposition: form-data; name="F{i}"; filename="F{i}";\r\n\r\n\r\n',
+            )
         )
     data = "".join(fields).encode("utf-8")
     data += b"--B--\r\n"
