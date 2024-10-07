@@ -115,8 +115,9 @@ def replace_params(
     return path, path_params
 
 
-# Match parameters in URL paths, eg. '{param}', and '{param:int}'
-PARAM_REGEX = re.compile("{([a-zA-Z_][a-zA-Z0-9_]*)(:[a-zA-Z_][a-zA-Z0-9_]*)?}")
+# Match parameters in URL paths, eg. '{param}',  '{param:int}', and '{param: int}'
+PARAM_REGEX = re.compile(r"{([a-zA-Z_][a-zA-Z0-9_]*)(?:\: ?([a-zA-Z_][a-zA-Z0-9_]*))?}")
+
 
 
 def compile_path(

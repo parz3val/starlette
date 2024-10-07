@@ -13,7 +13,14 @@ from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
-from starlette.routing import Host, Mount, NoMatchFound, Route, Router, WebSocketRoute
+from starlette.routing import (
+    Host,
+    Mount,
+    NoMatchFound,
+    Route,
+    Router,
+    WebSocketRoute,
+)
 from starlette.testclient import TestClient
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starlette.websockets import WebSocket, WebSocketDisconnect
@@ -88,6 +95,11 @@ def float_convertor(request: Request) -> JSONResponse:
     return JSONResponse({"float": num})
 
 
+def path_with_space(request: Request) -> JSONResponse:
+    num = request.path_params["param"]
+    return JSONResponse({"value": num})
+
+
 def path_convertor(request: Request) -> JSONResponse:
     path = request.path_params["param"]
     return JSONResponse({"path": path})
@@ -124,32 +136,63 @@ app = Router(
                 Route("/", endpoint=users),
                 Route("/me", endpoint=user_me),
                 Route("/{username}", endpoint=user),
-                Route("/{username}:disable", endpoint=disable_user, methods=["PUT"]),
+                Route(
+                    "/{username}:disable",
+                    endpoint=disable_user,
+                    methods=["PUT"],
+                ),
                 Route("/nomatch", endpoint=user_no_match),
             ],
         ),
         Mount(
             "/partial",
             routes=[
-                Route("/", endpoint=functools.partial(partial_endpoint, "foo")),
+                Route(
+                    "/", endpoint=functools.partial(partial_endpoint, "foo")
+                ),
                 Route(
                     "/cls",
-                    endpoint=functools.partial(PartialRoutes.async_endpoint, "foo"),
+                    endpoint=functools.partial(
+                        PartialRoutes.async_endpoint, "foo"
+                    ),
                 ),
-                WebSocketRoute("/ws", endpoint=functools.partial(partial_ws_endpoint)),
+                WebSocketRoute(
+                    "/ws", endpoint=functools.partial(partial_ws_endpoint)
+                ),
                 WebSocketRoute(
                     "/ws/cls",
-                    endpoint=functools.partial(PartialRoutes.async_ws_endpoint),
+                    endpoint=functools.partial(
+                        PartialRoutes.async_ws_endpoint
+                    ),
                 ),
             ],
         ),
         Mount("/static", app=Response("xxxxx", media_type="image/png")),
         Route("/func", endpoint=func_homepage, methods=["GET"]),
         Route("/func", endpoint=contact, methods=["POST"]),
-        Route("/int/{param:int}", endpoint=int_convertor, name="int-convertor"),
-        Route("/float/{param:float}", endpoint=float_convertor, name="float-convertor"),
-        Route("/path/{param:path}", endpoint=path_convertor, name="path-convertor"),
-        Route("/uuid/{param:uuid}", endpoint=uuid_converter, name="uuid-convertor"),
+        Route(
+            "/int/{param:int}", endpoint=int_convertor, name="int-convertor"
+        ),
+        Route(
+            "/float/{param:float}",
+            endpoint=float_convertor,
+            name="float-convertor",
+        ),
+        Route(
+            "/path-with-space/{param: int}",
+            endpoint=path_with_space,
+            name="path-with-space",
+        ),
+        Route(
+            "/path/{param:path}",
+            endpoint=path_convertor,
+            name="path-convertor",
+        ),
+        Route(
+            "/uuid/{param:uuid}",
+            endpoint=uuid_converter,
+            name="uuid-convertor",
+        ),
         # Route with chars that conflict with regex meta chars
         Route(
             "/path-with-parentheses({param:int})",
@@ -232,7 +275,10 @@ def test_route_converters(client: TestClient) -> None:
     response = client.get("/path-with-parentheses(7)")
     assert response.status_code == 200
     assert response.json() == {"int": 7}
-    assert app.url_path_for("path-with-parentheses", param=7) == "/path-with-parentheses(7)"
+    assert (
+        app.url_path_for("path-with-parentheses", param=7)
+        == "/path-with-parentheses(7)"
+    )
 
     # Test float conversion
     response = client.get("/float/25.5")
@@ -244,25 +290,46 @@ def test_route_converters(client: TestClient) -> None:
     response = client.get("/path/some/example")
     assert response.status_code == 200
     assert response.json() == {"path": "some/example"}
-    assert app.url_path_for("path-convertor", param="some/example") == "/path/some/example"
+    assert (
+        app.url_path_for("path-convertor", param="some/example")
+        == "/path/some/example"
+    )
 
     # Test UUID conversion
     response = client.get("/uuid/ec38df32-ceda-4cfa-9b4a-1aeb94ad551a")
     assert response.status_code == 200
     assert response.json() == {"uuid": "ec38df32-ceda-4cfa-9b4a-1aeb94ad551a"}
     assert (
-        app.url_path_for("uuid-convertor", param=uuid.UUID("ec38df32-ceda-4cfa-9b4a-1aeb94ad551a"))
+        app.url_path_for(
+            "uuid-convertor",
+            param=uuid.UUID("ec38df32-ceda-4cfa-9b4a-1aeb94ad551a"),
+        )
         == "/uuid/ec38df32-ceda-4cfa-9b4a-1aeb94ad551a"
     )
 
+def test_path_with_space(client: TestClient) ->  None:
+    response = client.get("/path-with-space/123")
+    assert response.status_code == 200
+    assert response.json() == {"value": 123}
+    assert (
+        app.url_path_for("path-with-space", param=123) == "/path-with-space/123"
+    )
 
 def test_url_path_for() -> None:
     assert app.url_path_for("homepage") == "/"
-    assert app.url_path_for("user", username="tomchristie") == "/users/tomchristie"
+    assert (
+        app.url_path_for("user", username="tomchristie")
+        == "/users/tomchristie"
+    )
     assert app.url_path_for("websocket_endpoint") == "/ws"
-    with pytest.raises(NoMatchFound, match='No route exists for name "broken" and params "".'):
+    with pytest.raises(
+        NoMatchFound, match='No route exists for name "broken" and params "".'
+    ):
         assert app.url_path_for("broken")
-    with pytest.raises(NoMatchFound, match='No route exists for name "broken" and params "key, key2".'):
+    with pytest.raises(
+        NoMatchFound,
+        match='No route exists for name "broken" and params "key, key2".',
+    ):
         assert app.url_path_for("broken", key="value", key2="value2")
     with pytest.raises(AssertionError):
         app.url_path_for("user", username="tom/christie")
@@ -271,21 +338,34 @@ def test_url_path_for() -> None:
 
 
 def test_url_for() -> None:
-    assert app.url_path_for("homepage").make_absolute_url(base_url="https://example.org") == "https://example.org/"
     assert (
-        app.url_path_for("homepage").make_absolute_url(base_url="https://example.org/root_path/")
+        app.url_path_for("homepage").make_absolute_url(
+            base_url="https://example.org"
+        )
+        == "https://example.org/"
+    )
+    assert (
+        app.url_path_for("homepage").make_absolute_url(
+            base_url="https://example.org/root_path/"
+        )
         == "https://example.org/root_path/"
     )
     assert (
-        app.url_path_for("user", username="tomchristie").make_absolute_url(base_url="https://example.org")
+        app.url_path_for("user", username="tomchristie").make_absolute_url(
+            base_url="https://example.org"
+        )
         == "https://example.org/users/tomchristie"
     )
     assert (
-        app.url_path_for("user", username="tomchristie").make_absolute_url(base_url="https://example.org/root_path/")
+        app.url_path_for("user", username="tomchristie").make_absolute_url(
+            base_url="https://example.org/root_path/"
+        )
         == "https://example.org/root_path/users/tomchristie"
     )
     assert (
-        app.url_path_for("websocket_endpoint").make_absolute_url(base_url="https://example.org")
+        app.url_path_for("websocket_endpoint").make_absolute_url(
+            base_url="https://example.org"
+        )
         == "wss://example.org/ws"
     )
 
@@ -317,7 +397,9 @@ def test_router_middleware(test_client_factory: TestClientFactory) -> None:
         def __init__(self, app: ASGIApp) -> None:
             self.app = app
 
-        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        async def __call__(
+            self, scope: Scope, receive: Receive, send: Send
+        ) -> None:
             response = PlainTextResponse("OK")
             await response(scope, receive, send)
 
@@ -338,17 +420,23 @@ def http_endpoint(request: Request) -> Response:
 
 
 class WebSocketEndpoint:
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
         websocket = WebSocket(scope=scope, receive=receive, send=send)
         await websocket.accept()
-        await websocket.send_json({"URL": str(websocket.url_for("websocket_endpoint"))})
+        await websocket.send_json(
+            {"URL": str(websocket.url_for("websocket_endpoint"))}
+        )
         await websocket.close()
 
 
 mixed_protocol_app = Router(
     routes=[
         Route("/", endpoint=http_endpoint),
-        WebSocketRoute("/", endpoint=WebSocketEndpoint(), name="websocket_endpoint"),
+        WebSocketRoute(
+            "/", endpoint=WebSocketEndpoint(), name="websocket_endpoint"
+        ),
     ]
 )
 
@@ -387,8 +475,14 @@ def test_reverse_mount_urls() -> None:
 
     users = Router([Route("/{username}", ok, name="user")])
     mounted = Router([Mount("/{subpath}/users", users, name="users")])
-    assert mounted.url_path_for("users:user", subpath="test", username="tom") == "/test/users/tom"
-    assert mounted.url_path_for("users", subpath="test", path="/tom") == "/test/users/tom"
+    assert (
+        mounted.url_path_for("users:user", subpath="test", username="tom")
+        == "/test/users/tom"
+    )
+    assert (
+        mounted.url_path_for("users", subpath="test", path="/tom")
+        == "/test/users/tom"
+    )
 
 
 def test_mount_at_root(test_client_factory: TestClientFactory) -> None:
@@ -427,7 +521,9 @@ mixed_hosts_app = Router(
 
 
 def test_host_routing(test_client_factory: TestClientFactory) -> None:
-    client = test_client_factory(mixed_hosts_app, base_url="https://api.example.org/")
+    client = test_client_factory(
+        mixed_hosts_app, base_url="https://api.example.org/"
+    )
 
     response = client.get("/users")
     assert response.status_code == 200
@@ -436,7 +532,9 @@ def test_host_routing(test_client_factory: TestClientFactory) -> None:
     response = client.get("/")
     assert response.status_code == 404
 
-    client = test_client_factory(mixed_hosts_app, base_url="https://www.example.org/")
+    client = test_client_factory(
+        mixed_hosts_app, base_url="https://www.example.org/"
+    )
 
     response = client.get("/users")
     assert response.status_code == 200
@@ -445,7 +543,9 @@ def test_host_routing(test_client_factory: TestClientFactory) -> None:
     response = client.get("/")
     assert response.status_code == 200
 
-    client = test_client_factory(mixed_hosts_app, base_url="https://port.example.org:3600/")
+    client = test_client_factory(
+        mixed_hosts_app, base_url="https://port.example.org:3600/"
+    )
 
     response = client.get("/users")
     assert response.status_code == 404
@@ -455,28 +555,44 @@ def test_host_routing(test_client_factory: TestClientFactory) -> None:
 
     # Port in requested Host is irrelevant.
 
-    client = test_client_factory(mixed_hosts_app, base_url="https://port.example.org/")
+    client = test_client_factory(
+        mixed_hosts_app, base_url="https://port.example.org/"
+    )
 
     response = client.get("/")
     assert response.status_code == 200
 
-    client = test_client_factory(mixed_hosts_app, base_url="https://port.example.org:5600/")
+    client = test_client_factory(
+        mixed_hosts_app, base_url="https://port.example.org:5600/"
+    )
 
     response = client.get("/")
     assert response.status_code == 200
 
 
 def test_host_reverse_urls() -> None:
-    assert mixed_hosts_app.url_path_for("homepage").make_absolute_url("https://whatever") == "https://www.example.org/"
     assert (
-        mixed_hosts_app.url_path_for("users").make_absolute_url("https://whatever") == "https://www.example.org/users"
+        mixed_hosts_app.url_path_for("homepage").make_absolute_url(
+            "https://whatever"
+        )
+        == "https://www.example.org/"
     )
     assert (
-        mixed_hosts_app.url_path_for("api:users").make_absolute_url("https://whatever")
+        mixed_hosts_app.url_path_for("users").make_absolute_url(
+            "https://whatever"
+        )
+        == "https://www.example.org/users"
+    )
+    assert (
+        mixed_hosts_app.url_path_for("api:users").make_absolute_url(
+            "https://whatever"
+        )
         == "https://api.example.org/users"
     )
     assert (
-        mixed_hosts_app.url_path_for("port:homepage").make_absolute_url("https://whatever")
+        mixed_hosts_app.url_path_for("port:homepage").make_absolute_url(
+            "https://whatever"
+        )
         == "https://port.example.org:3600/"
     )
 
@@ -486,11 +602,17 @@ async def subdomain_app(scope: Scope, receive: Receive, send: Send) -> None:
     await response(scope, receive, send)
 
 
-subdomain_router = Router(routes=[Host("{subdomain}.example.org", app=subdomain_app, name="subdomains")])
+subdomain_router = Router(
+    routes=[
+        Host("{subdomain}.example.org", app=subdomain_app, name="subdomains")
+    ]
+)
 
 
 def test_subdomain_routing(test_client_factory: TestClientFactory) -> None:
-    client = test_client_factory(subdomain_router, base_url="https://foo.example.org/")
+    client = test_client_factory(
+        subdomain_router, base_url="https://foo.example.org/"
+    )
 
     response = client.get("/")
     assert response.status_code == 200
@@ -499,9 +621,9 @@ def test_subdomain_routing(test_client_factory: TestClientFactory) -> None:
 
 def test_subdomain_reverse_urls() -> None:
     assert (
-        subdomain_router.url_path_for("subdomains", subdomain="foo", path="/homepage").make_absolute_url(
-            "https://whatever"
-        )
+        subdomain_router.url_path_for(
+            "subdomains", subdomain="foo", path="/homepage"
+        ).make_absolute_url("https://whatever")
         == "https://foo.example.org/homepage"
     )
 
@@ -525,9 +647,13 @@ echo_url_routes = [
 ]
 
 
-def test_url_for_with_root_path(test_client_factory: TestClientFactory) -> None:
+def test_url_for_with_root_path(
+    test_client_factory: TestClientFactory,
+) -> None:
     app = Starlette(routes=echo_url_routes)
-    client = test_client_factory(app, base_url="https://www.example.org/", root_path="/sub_path")
+    client = test_client_factory(
+        app, base_url="https://www.example.org/", root_path="/sub_path"
+    )
     response = client.get("/sub_path/")
     assert response.json() == {
         "index": "https://www.example.org/sub_path/",
@@ -545,7 +671,11 @@ async def stub_app(scope: Scope, receive: Receive, send: Send) -> None:
 
 
 double_mount_routes = [
-    Mount("/mount", name="mount", routes=[Mount("/static", stub_app, name="static")]),
+    Mount(
+        "/mount",
+        name="mount",
+        routes=[Mount("/static", stub_app, name="static")],
+    ),
 ]
 
 
@@ -616,7 +746,9 @@ def test_lifespan_async(test_client_factory: TestClientFactory) -> None:
         nonlocal shutdown_complete
         shutdown_complete = True
 
-    with pytest.deprecated_call(match="The on_startup and on_shutdown parameters are deprecated"):
+    with pytest.deprecated_call(
+        match="The on_startup and on_shutdown parameters are deprecated"
+    ):
         app = Router(
             on_startup=[run_startup],
             on_shutdown=[run_shutdown],
@@ -633,7 +765,9 @@ def test_lifespan_async(test_client_factory: TestClientFactory) -> None:
     assert shutdown_complete
 
 
-def test_lifespan_with_on_events(test_client_factory: TestClientFactory) -> None:
+def test_lifespan_with_on_events(
+    test_client_factory: TestClientFactory,
+) -> None:
     lifespan_called = False
     startup_called = False
     shutdown_called = False
@@ -654,11 +788,18 @@ def test_lifespan_with_on_events(test_client_factory: TestClientFactory) -> None
         nonlocal shutdown_called
         shutdown_called = True
 
-    with pytest.deprecated_call(match="The on_startup and on_shutdown parameters are deprecated"):
+    with pytest.deprecated_call(
+        match="The on_startup and on_shutdown parameters are deprecated"
+    ):
         with pytest.warns(
-            UserWarning, match="The `lifespan` parameter cannot be used with `on_startup` or `on_shutdown`."
+            UserWarning,
+            match="The `lifespan` parameter cannot be used with `on_startup` or `on_shutdown`.",
         ):
-            app = Router(on_startup=[run_startup], on_shutdown=[run_shutdown], lifespan=lifespan)
+            app = Router(
+                on_startup=[run_startup],
+                on_shutdown=[run_shutdown],
+                lifespan=lifespan,
+            )
 
             assert not lifespan_called
             assert not startup_called
@@ -688,7 +829,9 @@ def test_lifespan_sync(test_client_factory: TestClientFactory) -> None:
         nonlocal shutdown_complete
         shutdown_complete = True
 
-    with pytest.deprecated_call(match="The on_startup and on_shutdown parameters are deprecated"):
+    with pytest.deprecated_call(
+        match="The on_startup and on_shutdown parameters are deprecated"
+    ):
         app = Router(
             on_startup=[run_startup],
             on_shutdown=[run_shutdown],
@@ -719,16 +862,23 @@ def test_lifespan_state_unsupported(
         routes=[Mount("/", PlainTextResponse("hello, world"))],
     )
 
-    async def no_state_wrapper(scope: Scope, receive: Receive, send: Send) -> None:
+    async def no_state_wrapper(
+        scope: Scope, receive: Receive, send: Send
+    ) -> None:
         del scope["state"]
         await app(scope, receive, send)
 
-    with pytest.raises(RuntimeError, match='The server does not support "state" in the lifespan scope'):
+    with pytest.raises(
+        RuntimeError,
+        match='The server does not support "state" in the lifespan scope',
+    ):
         with test_client_factory(no_state_wrapper):
             raise AssertionError("Should not be called")  # pragma: no cover
 
 
-def test_lifespan_state_async_cm(test_client_factory: TestClientFactory) -> None:
+def test_lifespan_state_async_cm(
+    test_client_factory: TestClientFactory,
+) -> None:
     startup_complete = False
     shutdown_complete = False
 
@@ -780,7 +930,9 @@ def test_raise_on_startup(test_client_factory: TestClientFactory) -> None:
     def run_startup() -> None:
         raise RuntimeError()
 
-    with pytest.deprecated_call(match="The on_startup and on_shutdown parameters are deprecated"):
+    with pytest.deprecated_call(
+        match="The on_startup and on_shutdown parameters are deprecated"
+    ):
         router = Router(on_startup=[run_startup])
     startup_failed = False
 
@@ -803,7 +955,9 @@ def test_raise_on_shutdown(test_client_factory: TestClientFactory) -> None:
     def run_shutdown() -> None:
         raise RuntimeError()
 
-    with pytest.deprecated_call(match="The on_startup and on_shutdown parameters are deprecated"):
+    with pytest.deprecated_call(
+        match="The on_startup and on_shutdown parameters are deprecated"
+    ):
         app = Router(on_shutdown=[run_shutdown])
 
     with pytest.raises(RuntimeError):
@@ -811,7 +965,9 @@ def test_raise_on_shutdown(test_client_factory: TestClientFactory) -> None:
             pass  # pragma: no cover
 
 
-def test_partial_async_endpoint(test_client_factory: TestClientFactory) -> None:
+def test_partial_async_endpoint(
+    test_client_factory: TestClientFactory,
+) -> None:
     test_client = test_client_factory(app)
     response = test_client.get("/partial")
     assert response.status_code == 200
@@ -850,13 +1006,19 @@ def test_duplicated_param_names() -> None:
 
 
 class Endpoint:
-    async def my_method(self, request: Request) -> None: ...  # pragma: no cover
+    async def my_method(
+        self, request: Request
+    ) -> None: ...  # pragma: no cover
 
     @classmethod
-    async def my_classmethod(cls, request: Request) -> None: ...  # pragma: no cover
+    async def my_classmethod(
+        cls, request: Request
+    ) -> None: ...  # pragma: no cover
 
     @staticmethod
-    async def my_staticmethod(request: Request) -> None: ...  # pragma: no cover
+    async def my_staticmethod(
+        request: Request,
+    ) -> None: ...  # pragma: no cover
 
     def __call__(self, request: Request) -> None: ...  # pragma: no cover
 
@@ -866,7 +1028,9 @@ class Endpoint:
     [
         pytest.param(func_homepage, "func_homepage", id="function"),
         pytest.param(Endpoint().my_method, "my_method", id="method"),
-        pytest.param(Endpoint.my_classmethod, "my_classmethod", id="classmethod"),
+        pytest.param(
+            Endpoint.my_classmethod, "my_classmethod", id="classmethod"
+        ),
         pytest.param(
             Endpoint.my_staticmethod,
             "my_staticmethod",
@@ -876,7 +1040,9 @@ class Endpoint:
         pytest.param(lambda request: ..., "<lambda>", id="lambda"),
     ],
 )
-def test_route_name(endpoint: typing.Callable[..., Response], expected_name: str) -> None:
+def test_route_name(
+    endpoint: typing.Callable[..., Response], expected_name: str
+) -> None:
     assert Route(path="/", endpoint=endpoint).name == expected_name
 
 
@@ -884,7 +1050,9 @@ class AddHeadersMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
         scope["add_headers_middleware"] = True
 
         async def modified_send(msg: Message) -> None:
@@ -1029,7 +1197,9 @@ def test_mounted_middleware_does_not_catch_exception(
             self.app = app
             self.name = name
 
-        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        async def __call__(
+            self, scope: Scope, receive: Receive, send: Send
+        ) -> None:
             async def modified_send(msg: Message) -> None:
                 if msg["type"] == "http.response.start":
                     msg["headers"].append((f"X-{self.name}".encode(), b"true"))
@@ -1084,7 +1254,9 @@ def test_websocket_route_middleware(
         def __init__(self, app: ASGIApp) -> None:
             self.app = app
 
-        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        async def __call__(
+            self, scope: Scope, receive: Receive, send: Send
+        ) -> None:
             async def modified_send(msg: Message) -> None:
                 if msg["type"] == "websocket.accept":
                     msg["headers"].append((b"X-Test", b"Set by middleware"))
@@ -1112,7 +1284,10 @@ def test_websocket_route_middleware(
 
 def test_route_repr() -> None:
     route = Route("/welcome", endpoint=homepage)
-    assert repr(route) == "Route(path='/welcome', name='homepage', methods=['GET', 'HEAD'])"
+    assert (
+        repr(route)
+        == "Route(path='/welcome', name='homepage', methods=['GET', 'HEAD'])"
+    )
 
 
 def test_route_repr_without_methods() -> None:
@@ -1122,7 +1297,9 @@ def test_route_repr_without_methods() -> None:
 
 def test_websocket_route_repr() -> None:
     route = WebSocketRoute("/ws", endpoint=websocket_endpoint)
-    assert repr(route) == "WebSocketRoute(path='/ws', name='websocket_endpoint')"
+    assert (
+        repr(route) == "WebSocketRoute(path='/ws', name='websocket_endpoint')"
+    )
 
 
 def test_mount_repr() -> None:
@@ -1201,8 +1378,14 @@ async def echo_paths(request: Request, name: str) -> JSONResponse:
     )
 
 
-async def pure_asgi_echo_paths(scope: Scope, receive: Receive, send: Send, name: str) -> None:
-    data = {"name": name, "path": scope["path"], "root_path": scope["root_path"]}
+async def pure_asgi_echo_paths(
+    scope: Scope, receive: Receive, send: Send, name: str
+) -> None:
+    data = {
+        "name": name,
+        "path": scope["path"],
+        "root_path": scope["root_path"],
+    }
     content = json.dumps(data).encode("utf-8")
     await send(
         {
@@ -1227,7 +1410,10 @@ echo_paths_routes = [
         name="queue_path",
         methods=["POST"],
     ),
-    Mount("/asgipath", app=functools.partial(pure_asgi_echo_paths, name="asgipath")),
+    Mount(
+        "/asgipath",
+        app=functools.partial(pure_asgi_echo_paths, name="asgipath"),
+    ),
     Mount(
         "/sub",
         name="mount",
@@ -1245,7 +1431,9 @@ echo_paths_routes = [
 
 def test_paths_with_root_path(test_client_factory: TestClientFactory) -> None:
     app = Starlette(routes=echo_paths_routes)
-    client = test_client_factory(app, base_url="https://www.example.org/", root_path="/root")
+    client = test_client_factory(
+        app, base_url="https://www.example.org/", root_path="/root"
+    )
     response = client.get("/root/path")
     assert response.status_code == 200
     assert response.json() == {
