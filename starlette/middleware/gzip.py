@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import zlib
 from typing import NoReturn
 
@@ -7,10 +9,10 @@ import anyio.lowlevel
 import anyio.to_thread
 
 from starlette.datastructures import Headers, MutableHeaders
+from starlette.exceptions import StarletteDeprecationWarning
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-# TODO(v2): We should rename `DEFAULT_EXCLUDED_CONTENT_TYPES` to `DEFAULT_EXCLUDE_CONTENT_TYPES`.
-DEFAULT_EXCLUDED_CONTENT_TYPES = (
+DEFAULT_EXCLUDE_CONTENT_TYPES = (
     "application/gzip",
     "application/x-gzip",
     "application/zip",
@@ -25,6 +27,17 @@ DEFAULT_EXCLUDED_CONTENT_TYPES = (
     "text/event-stream",
     "video/*",
 )
+
+
+def __getattr__(name: str) -> tuple[str, ...]:  # type: ignore[no-untyped-def]
+    if name == "DEFAULT_EXCLUDED_CONTENT_TYPES":
+        warnings.warn(
+            "DEFAULT_EXCLUDED_CONTENT_TYPES is deprecated, use DEFAULT_EXCLUDE_CONTENT_TYPES instead.",
+            StarletteDeprecationWarning,
+            stacklevel=2,
+        )
+        return DEFAULT_EXCLUDE_CONTENT_TYPES
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 _gzip_capacity_limiter: anyio.lowlevel.RunVar[anyio.CapacityLimiter] = anyio.lowlevel.RunVar("_gzip_capacity_limiter")
 
@@ -49,7 +62,7 @@ class GZipMiddleware:
         compresslevel: int = 9,
         thread_minimum_size: int = 128 * 1024,  # 128 KiB
         *,
-        exclude_content_types: tuple[str, ...] = DEFAULT_EXCLUDED_CONTENT_TYPES,
+        exclude_content_types: tuple[str, ...] = DEFAULT_EXCLUDE_CONTENT_TYPES,
     ) -> None:
         self.app = app
         self.minimum_size = minimum_size
@@ -86,7 +99,7 @@ class IdentityResponder:
         app: ASGIApp,
         minimum_size: int,
         *,
-        exclude_content_types: tuple[str, ...] = DEFAULT_EXCLUDED_CONTENT_TYPES,
+        exclude_content_types: tuple[str, ...] = DEFAULT_EXCLUDE_CONTENT_TYPES,
     ) -> None:
         self.app = app
         self.minimum_size = minimum_size
@@ -187,7 +200,7 @@ class GZipResponder(IdentityResponder):
         compresslevel: int = 9,
         *,
         thread_minimum_size: int = 128 * 1024,  # 128 KiB
-        exclude_content_types: tuple[str, ...] = DEFAULT_EXCLUDED_CONTENT_TYPES,
+        exclude_content_types: tuple[str, ...] = DEFAULT_EXCLUDE_CONTENT_TYPES,
     ) -> None:
         super().__init__(app, minimum_size, exclude_content_types=exclude_content_types)
 
